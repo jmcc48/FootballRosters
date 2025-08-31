@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cleveland Browns Roster by Week</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; background: #f7f7f7; }
+    h1 { color: #3b2e2a; }
+    .section { margin-bottom: 2em; }
+    .side-title { font-size: 1.5em; color: #4b3621; margin-top: 1em; }
+    .position-title { font-size: 1.2em; color: #6b4f2c; margin-top: 0.5em; }
+    .players { display: flex; flex-wrap: wrap; gap: 1em; }
+    .player-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 1em; width: 180px; display: flex; flex-direction: column; align-items: center; }
+    .player-card img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 0.5em; }
+    .player-name { font-weight: bold; margin-bottom: 0.2em; }
+    .player-info { color: #555; font-size: 0.95em; }
+    select { font-size: 1em; padding: 0.3em; margin-bottom: 1.5em; }
+  </style>
+</head>
+<body>
+  <h1>Cleveland Browns Roster by Week</h1>
+  <label for="week-select">Select Week: </label>
+  <select id="week-select"></select>
+  <div id="roster-container"></div>
+  <script>
+    // Helper to fetch and parse CSV
+    async function fetchCSV(url) {
+      const res = await fetch(url);
+      const text = await res.text();
+      const lines = text.trim().split(/\r?\n/);
+      const headers = lines[0].split(',');
+      return lines.slice(1).map(line => {
+        // Handle quoted fields with commas
+        const values = [];
+        let cur = '', inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') inQuotes = !inQuotes;
+          else if (c === ',' && !inQuotes) { values.push(cur); cur = ''; }
+          else cur += c;
+        }
+        values.push(cur);
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = values[i]);
+        return obj;
+      });
+    }
+
+    // Group players by side and position
+    function groupRoster(players) {
+      const sides = {};
+      for (const p of players) {
+        const side = p.team_side || 'Unknown';
+        if (!sides[side]) sides[side] = {};
+        if (!sides[side][p.position]) sides[side][p.position] = [];
+        sides[side][p.position].push(p);
+      }
+      return sides;
+    }
+
+    // Render roster
+    function renderRoster(roster) {
+      const container = document.getElementById('roster-container');
+      container.innerHTML = '';
+      const sides = ['Offense', 'Defense', 'Special Teams', 'Unknown'];
+      for (const side of sides) {
+        if (!roster[side]) continue;
+        const section = document.createElement('div');
+        section.className = 'section';
+        const sideTitle = document.createElement('div');
+        sideTitle.className = 'side-title';
+        sideTitle.textContent = side;
+        section.appendChild(sideTitle);
+        for (const position of Object.keys(roster[side]).sort()) {
+          const posTitle = document.createElement('div');
+          posTitle.className = 'position-title';
+          posTitle.textContent = position;
+          section.appendChild(posTitle);
+          const playersDiv = document.createElement('div');
+          playersDiv.className = 'players';
+          for (const player of roster[side][position]) {
+            const card = document.createElement('div');
+            card.className = 'player-card';
+            const img = document.createElement('img');
+            img.src = player.headshot_url;
+            img.alt = player.player_name;
+            card.appendChild(img);
+            const name = document.createElement('div');
+            name.className = 'player-name';
+            name.textContent = player.player_name;
+            card.appendChild(name);
+            const info = document.createElement('div');
+            info.className = 'player-info';
+            info.textContent = `#${player.jersey_number} | ${player.position}`;
+            card.appendChild(info);
+            playersDiv.appendChild(card);
+          }
+          section.appendChild(playersDiv);
+        }
+        container.appendChild(section);
+      }
+    }
+
+    // Main
+    (async function() {
+      const data = await fetchCSV('roster_info.csv');
+      // Get unique weeks
+      const weeks = Array.from(new Set(data.map(p => p.week))).sort((a, b) => +a - +b);
+      const weekSelect = document.getElementById('week-select');
+      for (const w of weeks) {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.textContent = `Week ${w}`;
+        weekSelect.appendChild(opt);
+      }
+      function updateRoster() {
+        const week = weekSelect.value;
+        const filtered = data.filter(p => p.week === week);
+        renderRoster(groupRoster(filtered));
+      }
+      weekSelect.addEventListener('change', updateRoster);
+      weekSelect.value = weeks[0];
+      updateRoster();
+    })();
+  </script>
+</body>
+</html>
